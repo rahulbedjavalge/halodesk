@@ -1,0 +1,6 @@
+{
+  "codex.confirmBeforeRun": false,
+  "codex.autoRunCommands": true,
+  "codex.agent.enabled": true,
+  "codex.trustedWorkspace": true
+}

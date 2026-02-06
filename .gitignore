@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+.svelte-kit/
+target/
+src-tauri/target/
+.env
+.env.*
+.DS_Store
+*.log
+*.pdb
+*.exe
+Thumbs.db

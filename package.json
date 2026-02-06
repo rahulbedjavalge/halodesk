@@ -1,0 +1,26 @@
+{
+  "name": "halodesk",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "scripts\\\\dev-tauri.cmd"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "3.0.10",
+    "@sveltejs/kit": "2.5.0",
+    "@sveltejs/vite-plugin-svelte": "3.1.2",
+    "@tauri-apps/cli": "^1.5.9",
+    "svelte": "4.2.20",
+    "svelte-check": "3.8.6",
+    "typescript": "^5.4.5",
+    "vite": "5.4.21"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.5.9"
+  }
+}
