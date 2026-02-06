@@ -390,3 +390,107 @@ async fn complete_openrouter(
     "provider": "openrouter"
   }))
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::config::AppConfig;
+
+  fn base_config() -> AppConfig {
+    AppConfig {
+      text_default_model: "openrouter:text-default".to_string(),
+      vision_default_model: "openrouter:vision-default".to_string(),
+      fallback_model: "openrouter:fallback".to_string(),
+      models: vec![],
+    }
+  }
+
+  #[test]
+  fn split_provider_with_prefix() {
+    let (provider, model) = split_provider("openrouter:openai/gpt-4o-mini");
+    assert_eq!(provider, "openrouter");
+    assert_eq!(model, "openai/gpt-4o-mini");
+  }
+
+  #[test]
+  fn split_provider_without_prefix() {
+    let (provider, model) = split_provider("openai/gpt-4o-mini");
+    assert_eq!(provider, "openrouter");
+    assert_eq!(model, "openai/gpt-4o-mini");
+  }
+
+  #[test]
+  fn resolve_model_uses_override() {
+    let config = base_config();
+    let req = ChatRequest {
+      preset_id: None,
+      messages: vec![],
+      image: None,
+      model_override: Some("openrouter:override".to_string()),
+      stream: Some(true),
+    };
+
+    let resolved = resolve_model(&req, &config).expect("override should resolve");
+    assert_eq!(resolved, "openrouter:override");
+  }
+
+  #[test]
+  fn resolve_model_uses_vision_default_when_image_present() {
+    let config = base_config();
+    let req = ChatRequest {
+      preset_id: None,
+      messages: vec![],
+      image: Some(ImageData {
+        mime: "image/png".to_string(),
+        base64: "abc".to_string(),
+      }),
+      model_override: None,
+      stream: Some(true),
+    };
+
+    let resolved = resolve_model(&req, &config).expect("vision default should resolve");
+    assert_eq!(resolved, "openrouter:vision-default");
+  }
+
+  #[test]
+  fn resolve_model_uses_text_default_without_image() {
+    let config = base_config();
+    let req = ChatRequest {
+      preset_id: None,
+      messages: vec![],
+      image: None,
+      model_override: None,
+      stream: Some(true),
+    };
+
+    let resolved = resolve_model(&req, &config).expect("text default should resolve");
+    assert_eq!(resolved, "openrouter:text-default");
+  }
+
+  #[test]
+  fn to_openrouter_messages_attaches_image_to_last_user() {
+    let messages = vec![
+      Message {
+        role: "user".to_string(),
+        content: "First".to_string(),
+      },
+      Message {
+        role: "assistant".to_string(),
+        content: "Ack".to_string(),
+      },
+      Message {
+        role: "user".to_string(),
+        content: "Second".to_string(),
+      },
+    ];
+    let image = ImageData {
+      mime: "image/png".to_string(),
+      base64: "abc".to_string(),
+    };
+    let result = to_openrouter_messages(&messages, Some(&image));
+    assert_eq!(result.len(), 3);
+    let last = &result[2];
+    assert_eq!(last.role, "user");
+    assert!(last.content.is_array());
+  }
+}

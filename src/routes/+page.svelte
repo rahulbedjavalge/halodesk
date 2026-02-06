@@ -7,12 +7,11 @@
   type Role = 'system' | 'user' | 'assistant';
   type Message = { role: Role; content: string };
   type ImageData = { mime: string; base64: string };
-  type ModelInfo = { id: string; label: string; capability: 'text' | 'vision' };
   type AppConfig = {
     text_default_model: string;
     vision_default_model: string;
     fallback_model: string;
-    models: ModelInfo[];
+    models: { id: string; label: string; capability: string }[];
   };
 
   const presets = [
@@ -63,16 +62,12 @@
   let error = '';
   let activePreset = presets[0];
   let lastPrompt = '';
-  let modelOverride = '';
   let image: ImageData | null = null;
   let settingsOpen = false;
   let keySet = false;
   let activeModel = '';
 
-  let models: ModelInfo[] = [];
-  let textDefault = '';
-  let visionDefault = '';
-  let fallbackModel = '';
+  let defaultModel = '';
   let openrouterKey = '';
 
   const emptyConfig: AppConfig = {
@@ -87,10 +82,7 @@
   let resizeStartSize = { width: 0, height: 0 };
 
   function hydrateConfig(config: AppConfig) {
-    models = config.models ?? [];
-    textDefault = config.text_default_model ?? '';
-    visionDefault = config.vision_default_model ?? '';
-    fallbackModel = config.fallback_model ?? '';
+    defaultModel = config.text_default_model || config.vision_default_model || '';
   }
 
   onMount(async () => {
@@ -142,7 +134,7 @@
       preset_id: activePreset.id,
       messages,
       image: imageData,
-      model_override: modelOverride || null,
+      model_override: null,
       stream: true
     };
 
@@ -195,6 +187,14 @@
 
   async function send() {
     if (!prompt.trim()) return;
+    if (!keySet) {
+      error = 'OpenRouter key missing. Open Settings and add your key.';
+      return;
+    }
+    if (!defaultModel.trim()) {
+      error = 'Default model missing. Open Settings and add a model.';
+      return;
+    }
     lastPrompt = prompt.trim();
     await sendChat(buildMessages(lastPrompt), image);
   }
@@ -230,42 +230,18 @@
     image = null;
   }
 
-  function addModel() {
-    models = [...models, { id: '', label: '', capability: 'text' }];
-  }
-
-  function updateModel(index: number, field: keyof ModelInfo, value: string) {
-    const next = models.slice();
-    const updated = { ...next[index], [field]: value };
-    next[index] = updated;
-    models = next;
-  }
-
-  function handleModelLabelInput(index: number, event: Event) {
-    const target = event.currentTarget as HTMLInputElement;
-    updateModel(index, 'label', target.value);
-  }
-
-  function handleModelIdInput(index: number, event: Event) {
-    const target = event.currentTarget as HTMLInputElement;
-    updateModel(index, 'id', target.value);
-  }
-
-  function handleModelCapabilityChange(index: number, event: Event) {
-    const target = event.currentTarget as HTMLSelectElement;
-    updateModel(index, 'capability', target.value);
-  }
-
-  function removeModel(index: number) {
-    models = models.filter((_, i) => i !== index);
-  }
-
   async function saveSettings() {
+    const modelId = defaultModel.trim();
     const config: AppConfig = {
-      text_default_model: textDefault,
-      vision_default_model: visionDefault,
-      fallback_model: fallbackModel,
-      models
+      text_default_model: modelId,
+      vision_default_model: modelId,
+      fallback_model: modelId,
+      models: modelId
+        ? [
+            { id: modelId, label: modelId, capability: 'text' },
+            { id: modelId, label: modelId, capability: 'vision' }
+          ]
+        : []
     };
 
     try {
@@ -424,12 +400,6 @@
         <div class="input-header">
           <div class="section-title">Prompt</div>
           <div class="row-actions">
-            <select class="select" bind:value={modelOverride}>
-              <option value="">Auto model</option>
-              {#each models as model}
-                <option value={model.id}>{model.label || model.id}</option>
-              {/each}
-            </select>
             <button class="ghost" on:click={captureScreen} disabled={isStreaming}>Capture</button>
             <button class="ghost" on:click={() => (prompt = '')} disabled={isStreaming}>Clear</button>
             <button class="ghost" on:click={regenerate} disabled={!lastPrompt || isStreaming}>Regenerate</button>
@@ -506,46 +476,10 @@
           <input type="password" bind:value={openrouterKey} placeholder={keySet ? 'Key is set' : 'Enter key'} />
         </label>
 
-        <div class="grid">
-          <label class="field">
-            <span>Text default model</span>
-            <input type="text" bind:value={textDefault} placeholder="openrouter:provider/model" />
-          </label>
-          <label class="field">
-            <span>Vision default model</span>
-            <input type="text" bind:value={visionDefault} placeholder="openrouter:provider/model" />
-          </label>
-          <label class="field">
-            <span>Fallback model</span>
-            <input type="text" bind:value={fallbackModel} placeholder="openrouter:provider/model" />
-          </label>
-        </div>
-
-        <div class="section-title">Model list</div>
-        <div class="model-list">
-          {#each models as model, index}
-            <div class="model-row">
-              <input
-                type="text"
-                value={model.label}
-                placeholder="Label"
-                on:input={(event) => handleModelLabelInput(index, event)}
-              />
-              <input
-                type="text"
-                value={model.id}
-                placeholder="openrouter:provider/model"
-                on:input={(event) => handleModelIdInput(index, event)}
-              />
-              <select value={model.capability} on:change={(event) => handleModelCapabilityChange(index, event)}>
-                <option value="text">text</option>
-                <option value="vision">vision</option>
-              </select>
-              <button class="ghost" on:click={() => removeModel(index)}>Remove</button>
-            </div>
-          {/each}
-        </div>
-        <button class="ghost" on:click={addModel}>Add model</button>
+        <label class="field">
+          <span>Default model</span>
+          <input type="text" bind:value={defaultModel} placeholder="openrouter:provider/model" />
+        </label>
       </div>
 
       <footer>
@@ -849,32 +783,6 @@
   .field input {
     padding: 8px 10px;
     border-radius: 10px;
-    border: 1px solid rgba(15, 23, 42, 0.2);
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-  }
-
-  .model-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .model-row {
-    display: grid;
-    grid-template-columns: 140px 1fr 90px 80px;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .model-row input,
-  .model-row select {
-    padding: 6px 8px;
-    border-radius: 8px;
     border: 1px solid rgba(15, 23, 42, 0.2);
   }
 
