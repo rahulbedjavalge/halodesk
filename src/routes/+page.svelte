@@ -176,6 +176,12 @@
           }
         } else if (event === 'meta') {
           activeModel = `${data?.provider ?? ''} ${data?.model ?? ''}`.trim();
+        } else if (event === 'done') {
+          if (data?.error) {
+            error = String(data.error);
+          } else if (data?.finish_reason === 'error') {
+            error = 'Model returned an error.';
+          }
         }
       });
     } catch (err) {
@@ -271,6 +277,9 @@
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      if (buffer.includes('\r\n')) {
+        buffer = buffer.replace(/\r\n/g, '\n');
+      }
 
       let boundary = buffer.indexOf('\n\n');
       while (boundary !== -1) {
@@ -637,14 +646,6 @@
     font-size: 15px;
     line-height: 1.5;
     min-height: 110px;
-  }
-
-  .select {
-    padding: 6px 10px;
-    border-radius: 10px;
-    border: 1px solid rgba(15, 23, 42, 0.2);
-    background: white;
-    font-size: 12px;
   }
 
   button {
