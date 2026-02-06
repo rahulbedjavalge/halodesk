@@ -121,8 +121,9 @@ fn error_response(status: StatusCode, code: &str, message: &str) -> Response {
 }
 
 fn split_provider(model_id: &str) -> (String, String) {
-  if let Some((provider, model)) = model_id.split_once(':') {
-    (provider.to_string(), model.to_string())
+  const PREFIX: &str = "openrouter:";
+  if model_id.starts_with(PREFIX) {
+    ("openrouter".to_string(), model_id[PREFIX.len()..].to_string())
   } else {
     ("openrouter".to_string(), model_id.to_string())
   }
@@ -417,6 +418,13 @@ mod tests {
     let (provider, model) = split_provider("openai/gpt-4o-mini");
     assert_eq!(provider, "openrouter");
     assert_eq!(model, "openai/gpt-4o-mini");
+  }
+
+  #[test]
+  fn split_provider_handles_colon_in_model() {
+    let (provider, model) = split_provider("nvidia/nemotron-3-nano-30b-a3b:free");
+    assert_eq!(provider, "openrouter");
+    assert_eq!(model, "nvidia/nemotron-3-nano-30b-a3b:free");
   }
 
   #[test]
