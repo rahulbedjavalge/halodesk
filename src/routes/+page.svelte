@@ -228,7 +228,14 @@
     try {
       image = await invoke<ImageData>('capture_primary_display');
     } catch (err) {
-      error = `Capture failed: ${String(err)}`;
+      const message = String(err);
+      if (/permission|denied|ScreenCapture/i.test(message)) {
+        error = 'Capture failed: Screen recording permission is required.';
+      } else if (/no screens found/i.test(message)) {
+        error = 'Capture failed: No displays detected.';
+      } else {
+        error = `Capture failed: ${message}`;
+      }
     }
   }
 
@@ -314,7 +321,8 @@
   }
 
   function handlePromptKeydown(event: KeyboardEvent) {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       send();
     }
   }
@@ -412,6 +420,7 @@
             <button class="ghost" on:click={captureScreen} disabled={isStreaming}>Capture</button>
             <button class="ghost" on:click={() => (prompt = '')} disabled={isStreaming}>Clear</button>
             <button class="ghost" on:click={regenerate} disabled={!lastPrompt || isStreaming}>Regenerate</button>
+            <button class="primary" on:click={send} disabled={isStreaming || !prompt.trim()}>Send</button>
           </div>
         </div>
         <textarea
