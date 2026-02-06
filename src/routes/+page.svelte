@@ -1,8 +1,11 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/tauri';
-  import { readText, writeText } from '@tauri-apps/api/clipboard';
-  import { appWindow, PhysicalSize } from '@tauri-apps/api/window';
+
+  let invoke: any = null;
+  let readText: any = null;
+  let writeText: any = null;
+  let appWindow: any = null;
+  let PhysicalSize: any = null;
 
   type Role = 'system' | 'user' | 'assistant';
   type Message = { role: Role; content: string };
@@ -87,6 +90,20 @@
   }
 
   onMount(async () => {
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      const tauri = await import('@tauri-apps/api/tauri');
+      invoke = tauri.invoke;
+      const clipboard = await import('@tauri-apps/api/clipboard');
+      readText = clipboard.readText;
+      writeText = clipboard.writeText;
+      const windowApi = await import('@tauri-apps/api/window');
+      appWindow = windowApi.appWindow;
+      PhysicalSize = windowApi.PhysicalSize;
+    } else {
+      error = 'Tauri APIs not available. Run via `npm run tauri:dev` or a built app.';
+      return;
+    }
+
     try {
       port = await invoke('router_port');
     } catch (err) {
@@ -112,13 +129,15 @@
       keySet = false;
     }
 
-    try {
-      const clip = await readText();
-      if (!prompt && clip && clip.trim().length > 0) {
-        prompt = clip.trim();
+    if (readText) {
+      try {
+        const clip = await readText();
+        if (!prompt && clip && clip.trim().length > 0) {
+          prompt = clip.trim();
+        }
+      } catch {
+        // ignore clipboard errors
       }
-    } catch {
-      // ignore clipboard errors
     }
   });
 
@@ -236,11 +255,19 @@
 
   async function copyOutput() {
     if (!output) return;
+    if (!writeText) {
+      error = 'Clipboard unavailable.';
+      return;
+    }
     await writeText(output);
   }
 
   async function captureScreen() {
     error = '';
+    if (!invoke) {
+      error = 'Tauri API not available for capture.';
+      return;
+    }
     try {
       image = await invoke<ImageData>('capture_primary_display');
     } catch (err) {
@@ -260,6 +287,10 @@
   }
 
   async function saveSettings() {
+    if (!invoke) {
+      error = 'Tauri API not available for saving settings.';
+      return;
+    }
     const modelId = defaultModel.trim();
     const config: AppConfig = {
       text_default_model: modelId,
@@ -352,7 +383,9 @@
     if (target.closest('button') || target.closest('input') || target.closest('select')) {
       return;
     }
-    await appWindow.startDragging();
+    if (appWindow) {
+      await appWindow.startDragging();
+    }
   }
 
   function handleDragKeydown(event: KeyboardEvent) {
@@ -361,11 +394,14 @@
   }
 
   async function hideWindow() {
-    await appWindow.hide();
+    if (appWindow) {
+      await appWindow.hide();
+    }
   }
 
   async function startResize(event: MouseEvent) {
     event.preventDefault();
+    if (!appWindow || !PhysicalSize) return;
     resizing = true;
     resizeStart = { x: event.screenX, y: event.screenY };
     const size = await appWindow.innerSize();
@@ -380,7 +416,7 @@
   }
 
   function resizeMove(event: MouseEvent) {
-    if (!resizing) return;
+    if (!resizing || !appWindow || !PhysicalSize) return;
     const dx = event.screenX - resizeStart.x;
     const dy = event.screenY - resizeStart.y;
     const width = Math.max(520, resizeStartSize.width + dx);
