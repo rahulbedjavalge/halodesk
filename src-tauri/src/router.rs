@@ -22,15 +22,21 @@ pub struct RouterState {
   pub started_at: Instant,
   pub config: Arc<RwLock<AppConfig>>,
   pub db: Arc<Mutex<rusqlite::Connection>>,
+  pub logger: Arc<crate::logger::Logger>,
+  pub port: u16,
 }
 
 pub async fn run_router(listener: TcpListener, state: RouterState) -> anyhow::Result<()> {
+  state
+    .logger
+    .log("INFO", &format!("Router starting on 127.0.0.1:{}", state.port));
   let app = Router::new()
     .route("/health", get(health))
     .route("/v1/models", get(models))
     .route("/v1/chat", post(chat))
     .route("/v1/memory/store", post(memory_store))
     .route("/v1/memory/query", post(memory_query))
+    .route("/debug/status", get(debug_status))
     .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
     .with_state(Arc::new(state));
 
@@ -61,6 +67,7 @@ async fn memory_store(
   State(state): State<Arc<RouterState>>,
   Json(req): Json<MemoryStoreRequest>,
 ) -> impl IntoResponse {
+  state.logger.log("INFO", "memory_store request");
   match storage::memory_store(&state.db, req).await {
     Ok(res) => (StatusCode::OK, Json(res)).into_response(),
     Err(err) => error_response(StatusCode::BAD_REQUEST, "memory_store_failed", &err.to_string()),
@@ -71,6 +78,7 @@ async fn memory_query(
   State(state): State<Arc<RouterState>>,
   Json(req): Json<MemoryQueryRequest>,
 ) -> impl IntoResponse {
+  state.logger.log("INFO", &format!("memory_query: {}", req.query));
   match storage::memory_query(&state.db, req).await {
     Ok(res) => (StatusCode::OK, Json(res)).into_response(),
     Err(err) => error_response(StatusCode::BAD_REQUEST, "memory_query_failed", &err.to_string()),
@@ -81,6 +89,15 @@ async fn chat(
   State(state): State<Arc<RouterState>>,
   Json(req): Json<ChatRequest>,
 ) -> impl IntoResponse {
+  state.logger.log(
+    "INFO",
+    &format!(
+      "chat request: messages={}, image={}, stream={}",
+      req.messages.len(),
+      req.image.is_some(),
+      req.stream.unwrap_or(true)
+    ),
+  );
   let config = state.config.read().await.clone();
   let model_id = match resolve_model(&req, &config) {
     Ok(m) => m,
@@ -89,6 +106,7 @@ async fn chat(
 
   let (provider, model) = split_provider(&model_id);
   if provider != "openrouter" {
+    state.logger.log("WARN", &format!("unsupported provider: {}", provider));
     return error_response(
       StatusCode::BAD_REQUEST,
       "provider_unsupported",
@@ -159,6 +177,23 @@ fn get_openrouter_key() -> Result<String, String> {
   } else {
     Ok(key)
   }
+}
+
+async fn debug_status(State(state): State<Arc<RouterState>>) -> Json<serde_json::Value> {
+  let config = state.config.read().await.clone();
+  let key_set = keyring::Entry::new("HaloRouter", "openrouter")
+    .and_then(|e| e.get_password())
+    .map(|p| !p.trim().is_empty())
+    .unwrap_or(false);
+
+  Json(serde_json::json!({
+    "status": "ok",
+    "port": state.port,
+    "key_set": key_set,
+    "text_default": config.text_default_model,
+    "vision_default": config.vision_default_model,
+    "models_count": config.models.len()
+  }))
 }
 
 #[derive(serde::Serialize)]
@@ -258,6 +293,7 @@ async fn stream_openrouter(
       .unwrap_or_else(|_| "OpenRouter request failed.".to_string());
     let status = StatusCode::BAD_GATEWAY;
     let message = format!("OpenRouter error ({}): {}", upstream_status, text);
+    state.logger.log("ERROR", &message);
     return Err((status, message));
   }
 
@@ -369,6 +405,7 @@ async fn complete_openrouter(
       .unwrap_or_else(|_| "OpenRouter request failed.".to_string());
     let status = StatusCode::BAD_GATEWAY;
     let message = format!("OpenRouter error ({}): {}", upstream_status, text);
+    state.logger.log("ERROR", &message);
     return Err((status, message));
   }
 

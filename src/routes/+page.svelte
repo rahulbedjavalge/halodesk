@@ -69,6 +69,7 @@
 
   let defaultModel = '';
   let openrouterKey = '';
+  let logPath = '';
 
   const emptyConfig: AppConfig = {
     text_default_model: '',
@@ -97,6 +98,12 @@
       hydrateConfig(cfg ?? emptyConfig);
     } catch (err) {
       error = `Config load failed: ${String(err)}`;
+    }
+
+    try {
+      logPath = await invoke<string>('get_log_path');
+    } catch {
+      logPath = '';
     }
 
     try {
@@ -185,7 +192,12 @@
         }
       });
     } catch (err) {
-      error = String(err);
+      const message = String(err);
+      if (/Failed to fetch|NetworkError|ERR_CONNECTION_REFUSED/i.test(message)) {
+        error = 'Router not reachable. Make sure the app is running and try again.';
+      } else {
+        error = message;
+      }
     } finally {
       isStreaming = false;
     }
@@ -507,6 +519,13 @@
           <span>Default model</span>
           <input type="text" bind:value={defaultModel} placeholder="openrouter:provider/model" />
         </label>
+
+        {#if logPath}
+          <div class="field">
+            <span>Log file</span>
+            <code class="path">{logPath}</code>
+          </div>
+        {/if}
       </div>
 
       <footer>

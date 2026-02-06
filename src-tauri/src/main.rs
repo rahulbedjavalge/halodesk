@@ -2,6 +2,7 @@
 
 mod capture;
 mod config;
+mod logger;
 mod models;
 mod router;
 mod storage;
@@ -20,6 +21,7 @@ struct AppState {
   router_port: u16,
   config_path: PathBuf,
   config: Arc<RwLock<AppConfig>>,
+  log_path: PathBuf,
 }
 
 #[tauri::command]
@@ -58,6 +60,11 @@ fn capture_primary_display() -> Result<models::ImageData, String> {
   capture::capture_primary_display().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn get_log_path(state: State<'_, AppState>) -> String {
+  state.log_path.display().to_string()
+}
+
 fn main() {
   tauri::Builder::default()
     .setup(|app| {
@@ -70,12 +77,16 @@ fn main() {
 
         let config_path = data_dir.join("config.json");
         let db_path = data_dir.join("halodesk.sqlite3");
+        let log_path = data_dir.join("halodesk.log");
 
         let config = load_or_init(&config_path)?;
         let config = Arc::new(RwLock::new(config));
 
         let db = init_db(&db_path)?;
         let db = Arc::new(tokio::sync::Mutex::new(db));
+
+        let logger = Arc::new(logger::Logger::new(&log_path)?);
+        logger.log("INFO", "HaloDesk starting up");
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
         let port = listener.local_addr()?.port();
@@ -84,6 +95,8 @@ fn main() {
           started_at: Instant::now(),
           config: config.clone(),
           db,
+          logger: logger.clone(),
+          port,
         };
 
         tauri::async_runtime::spawn(async move {
@@ -96,6 +109,7 @@ fn main() {
           router_port: port,
           config_path,
           config,
+          log_path,
         });
 
         if let Some(window) = app.get_window("main") {
@@ -126,7 +140,8 @@ fn main() {
       set_config,
       set_openrouter_key,
       has_openrouter_key,
-      capture_primary_display
+      capture_primary_display,
+      get_log_path
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
