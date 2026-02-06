@@ -25,3 +25,7 @@ tokio-stream = "0.1"
 async-stream = "0.3"
 thiserror = "1.0"
 screenshots = "0.8"
+
+[features]
+# Required by Tauri for production builds and when using the local protocol.
+custom-protocol = ["tauri/custom-protocol"]

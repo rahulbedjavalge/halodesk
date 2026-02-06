@@ -99,7 +99,7 @@ fn main() {
         });
 
         if let Some(window) = app.get_window("main") {
-          let _ = window.set_content_protection(true);
+          let _ = window.set_content_protected(true);
         }
 
         let handle = app.handle();
