@@ -89,8 +89,11 @@
     defaultModel = config.text_default_model || config.vision_default_model || '';
   }
 
-  onMount(async () => {
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  async function initTauri() {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    try {
       const tauri = await import('@tauri-apps/api/tauri');
       invoke = tauri.invoke;
       const clipboard = await import('@tauri-apps/api/clipboard');
@@ -99,10 +102,16 @@
       const windowApi = await import('@tauri-apps/api/window');
       appWindow = windowApi.appWindow;
       PhysicalSize = windowApi.PhysicalSize;
-    } else {
-      error = 'Tauri APIs not available. Run via `npm run tauri:dev` or a built app.';
-      return;
+      return true;
+    } catch {
+      error = 'Tauri APIs not available. Use the desktop app or run `npm run tauri:dev`.';
+      return false;
     }
+  }
+
+  onMount(async () => {
+    const ok = await initTauri();
+    if (!ok) return;
 
     try {
       port = await invoke('router_port');
@@ -265,7 +274,7 @@
   async function captureScreen() {
     error = '';
     if (!invoke) {
-      error = 'Tauri API not available for capture.';
+      error = 'Tauri API not available. Run the desktop app.';
       return;
     }
     try {
@@ -288,7 +297,7 @@
 
   async function saveSettings() {
     if (!invoke) {
-      error = 'Tauri API not available for saving settings.';
+      error = 'Tauri API not available. Run the desktop app.';
       return;
     }
     const modelId = defaultModel.trim();
