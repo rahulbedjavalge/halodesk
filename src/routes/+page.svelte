@@ -193,6 +193,10 @@
 
   async function send() {
     if (!prompt.trim()) return;
+    if (looksLikeApiKey(prompt)) {
+      error = 'That looks like an API key. Do not paste keys into chat. Use Settings instead.';
+      return;
+    }
     if (!keySet) {
       error = 'OpenRouter key missing. Open Settings and add your key.';
       return;
@@ -327,6 +331,10 @@
     }
   }
 
+  function looksLikeApiKey(text: string) {
+    return /sk-or-[a-z0-9]{20,}/i.test(text) || /\bsk-[a-z0-9]{20,}\b/i.test(text);
+  }
+
   async function startDrag(event: MouseEvent) {
     const target = event.target as HTMLElement;
     if (target.closest('button') || target.closest('input') || target.closest('select')) {
@@ -452,6 +460,7 @@
       <div class="status">
         <div>Router: {port ? `127.0.0.1:${port}` : 'starting...'}</div>
         <div>Key: {keySet ? 'set' : 'missing'}</div>
+        <div>Default model: {defaultModel || 'missing'}</div>
         {#if activeModel}
           <div>Model: {activeModel}</div>
         {/if}
