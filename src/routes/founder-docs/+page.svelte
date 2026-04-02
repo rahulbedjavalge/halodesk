@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, tick } from 'svelte';
   type Section = {
     title: string;
     intent: string;
@@ -187,6 +188,7 @@
 
   let selectedCountry: 'india' | 'germany' = 'india';
   let chatInput = '';
+  let messagesContainer: HTMLDivElement | undefined;
   let messages: Message[] = [
     {
       role: 'bot',
@@ -195,6 +197,11 @@
   ];
 
   const normalize = (value: string) => value.toLowerCase().trim();
+
+  onMount(() => {
+    const locale = normalize(globalThis.navigator?.language ?? '');
+    selectedCountry = locale.startsWith('de') ? 'germany' : 'india';
+  });
 
   function getBotReply(input: string): string {
     const prompt = normalize(input);
@@ -227,7 +234,7 @@
     return `I can help with company setup, trademark, and copyright for ${country}. Ask naturally, for example: "How do I start trademark filing?"`;
   }
 
-  function sendMessage() {
+  async function sendMessage() {
     const text = chatInput.trim();
     if (!text) {
       return;
@@ -236,6 +243,8 @@
     messages = [...messages, { role: 'user', text }];
     messages = [...messages, { role: 'bot', text: getBotReply(text) }];
     chatInput = '';
+    await tick();
+    messagesContainer?.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'smooth' });
   }
 </script>
 
@@ -306,7 +315,7 @@
 
         <div class="links">
           {#each section.officialLinks as link}
-            <a href={link.url} target="_blank" rel="noreferrer">{link.label}</a>
+            <a href={link.url} target="_blank" rel="noreferrer noopener">{link.label}</a>
           {/each}
         </div>
       </article>
@@ -317,7 +326,7 @@
     <h2>Natural-language chatbot</h2>
     <p>Ask in plain language and get fast guidance for the selected country.</p>
 
-    <div class="messages" aria-live="polite">
+    <div class="messages" aria-live="polite" bind:this={messagesContainer}>
       {#each messages as message}
         <div class="bubble {message.role}">{message.text}</div>
       {/each}
@@ -329,11 +338,12 @@
         sendMessage();
       }}
     >
+      <label for="chat-input">Ask your question</label>
       <input
+        id="chat-input"
         type="text"
         bind:value={chatInput}
         placeholder="Example: How do I register a trademark?"
-        aria-label="Chat input"
       />
       <button type="submit">Send</button>
     </form>
@@ -501,17 +511,31 @@
   .chat-input {
     display: grid;
     grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'label label'
+      'input button';
     gap: 0.6rem;
     margin-top: 0.85rem;
   }
 
+  .chat-input label {
+    grid-area: label;
+    font-size: 0.9rem;
+    color: #cbd5e1;
+  }
+
   .chat-input input {
+    grid-area: input;
     border: 1px solid rgba(148, 163, 184, 0.25);
     background: rgba(2, 6, 23, 0.8);
     border-radius: 0.75rem;
     color: #f8fafc;
     padding: 0.72rem 0.8rem;
     font: inherit;
+  }
+
+  .chat-input button {
+    grid-area: button;
   }
 
   .chat-input input:focus-visible,
